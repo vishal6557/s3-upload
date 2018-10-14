@@ -42,9 +42,9 @@ app.use(function (err, req, res, next) {
     res.send({ success: false, message: err });
 });
 
-var port = (process.env.NODE_ENV == 'production') ? 3000 : 3001;
+var port = 3000;
 server.listen(port, function () {
-    console.log('CSYE 6225 API listening on port ' + port);
+    console.log('Server starting at port "  + port);
 });
 
 module.exports = app;
