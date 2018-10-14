@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const S3 = require('../services/s3');
 const BUCKET_NAME = 'lambda-test-upload123';
-const FILE_PATH = '/tmp';
+const FILE_PATH = __dirname + '/../tmp';
 
 async function upload(request){
     
@@ -18,12 +18,13 @@ async function upload(request){
 async function uploadToTemp(request) {
     try {
         let filename;
+        console.log("Coming to request ", request)
         return new Promise((resolve, reject) => {
             let form = new formidable.IncomingForm();
             // form.multiples = false; // allows for multiple files in a single request
             form.maxFieldsSize = 2 * 1024 * 1024;
-            form.maxFileSize = 74 * 1024 * 1024;
-            form.uploadDir = "/tmp";
+            // form.maxFileSize = 74 * 1024 * 1024;
+            // form.uploadDir = __dirname + "/tmp";
 
             form.keepExtensions = true;
             form.parse(request, async (err, fields, file) => {

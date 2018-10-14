@@ -44,7 +44,7 @@ app.use(function (err, req, res, next) {
 
 var port = 3000;
 server.listen(port, function () {
-    console.log('Server starting at port "  + port);
+    console.log('Server starting at port ' , port);
 });
 
 module.exports = app;
