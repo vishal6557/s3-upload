@@ -5,21 +5,20 @@ let UploadController = require('../controllers/upload');
 /**
  * Uplaod file to s3
  */
-router.post("/", async (req, res, next) => {
+router.get("/", async (req, res, next) => {
 
-    console.log("Coming in route")
+    console.log("Coming in route get/")
     try {
-
-        let message = await UploadController.upload(req);
         res.json({
             success: true,
-            message: message
+            message: "Welcome to demo of uploading csv to elastic search"
         })
     }
     catch (e) {
-        console.log("Error is here ",e);
         next(e);
     }
 })
+
+
 
 module.exports = router;
