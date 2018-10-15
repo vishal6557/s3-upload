@@ -18,7 +18,7 @@ async function upload(request){
 async function uploadToTemp(request) {
     try {
         let filename;
-        console.log("Coming to request ", request)
+        
         return new Promise((resolve, reject) => {
             let form = new formidable.IncomingForm();
             // form.multiples = false; // allows for multiple files in a single request
@@ -38,8 +38,9 @@ async function uploadToTemp(request) {
             });
 
             form.on('file', function (name, file) {
+		 console.log(`Uploading file ${file.name} to temporary location`)
                 filename = file.name;
-                console.log(`Uploading file ${file.name} to temporary location`)
+                //console.log(`Uploading file ${file.name} to temporary location`)
             });
 
             form.on('end', function (name) {
