@@ -2,7 +2,9 @@ const formidable = require('formidable');
 const path = require('path');
 const fs = require('fs');
 const S3 = require('../services/s3');
-const BUCKET_NAME = 'lambda-test-upload123';
+const lambda = require('../services/lambda');
+const auth = require('../auth.json');
+const BUCKET_NAME = 'upload-csv-ecs';
 const FILE_PATH = __dirname + '/../tmp';
 
 async function upload(request){
@@ -11,9 +13,46 @@ async function upload(request){
 
     let filePath = path.join(FILE_PATH, filename);
 
-    return await uploadToS3(BUCKET_NAME, filePath, 'test/'+ filename);
+    let s3data = await uploadToS3(BUCKET_NAME, filePath, 'test/'+ filename);
+    
+   
+    let resLambda = await processCsvToEcs(s3data);
+    
+    resLambda.LogResult = new Buffer(resLambda.LogResult, 'base64').toString();
+    
+    return `${filename} was successfully insterted in elastic search`;
 }
 
+/**
+ *  Takes key and bucket of file name and process to call lambda
+ * @param {S3} s3data 
+ */
+async function processCsvToEcs(s3data) {
+    return new Promise(async (resolve, reject) => {
+        let payload = {
+            key: s3data.Key,
+            bucket: s3data.Bucket,
+            byte: 0,
+            header: "",
+        }
+        let params = {
+            FunctionName: auth.lambda, /* required */
+            Payload: JSON.stringify(payload),
+            InvocationType: "RequestResponse",
+            LogType: "Tail"
+        };
+        lambda.invoke(params, function (err, data) {
+            if (err) {
+                console.log(err, err.stack); // an error occurred
+                return reject(err);
+            }
+            else {
+                // console.log(data); 
+                return resolve(data);
+            }          // successful response
+        });
+    });
+}
 
 async function uploadToTemp(request) {
     try {
