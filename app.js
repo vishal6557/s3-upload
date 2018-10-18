@@ -40,7 +40,7 @@ app.use(function (err, req, res, next) {
     console.log(err);
     // render the error page
     res.status(err.status || 200);
-    res.send({ success: false, message: err });
+    res.send({ success: false, message: err.message });
 });
 
 var port = 3000;

@@ -5,25 +5,39 @@ const S3 = require('../services/s3');
 const lambda = require('../services/lambda');
 const auth = require('../auth.json');
 const BUCKET_NAME = 'upload-csv-ecs';
+const uuid = require('uuid/v4');
 const FILE_PATH = __dirname + '/../tmp';
 
-async function upload(request){
-try{    
-    let filename = await uploadToTemp(request);
+/**
+ *  Upload file and response of lambda function
+ * @param {Request} request 
+ */
+async function upload(request) {
+    try {
 
-    let filePath = path.join(FILE_PATH, filename);
+        let filename = await uploadToTemp(request);
+        if (!filename) {
+            throw { status: 400, message: "No file name is found" };
+        }
 
-    let s3data = await uploadToS3(BUCKET_NAME, filePath, 'test/'+ filename);
-    
-   
-    let resLambda = await processCsvToEcs(s3data);
-    
-    resLambda.LogResult = new Buffer(resLambda.LogResult, 'base64').toString();
-    
-    return `${filename} was successfully insterted in elastic search`;
-} catch(e){
-throw e;
-}
+        let filePath = path.join(FILE_PATH, filename);
+        console.log(`${filename} is uploaded to temporary location ${filePath}`);
+
+        let s3data = await uploadToS3(BUCKET_NAME, filePath, 'test/' + filename);
+        console.log(`${filename} is uploaded to s3 with key ${s3data.key}`);
+
+        let resLambda = await processCsvToEcs(s3data);
+
+        // convert log to string 
+        // resLambda.LogResult = new Buffer(resLambda.LogResult, 'base64').toString();
+
+        //remove temporary file for EBS
+        await rmFile(filePath);
+
+        return `${filename.substring(37)} was successfully insterted in elastic search`;
+    } catch (e) {
+        throw e;
+    }
 }
 
 /**
@@ -31,6 +45,7 @@ throw e;
  * @param {S3} s3data 
  */
 async function processCsvToEcs(s3data) {
+    console.log(`Lambda is kick-off for ${s3data.Key}`);
     return new Promise(async (resolve, reject) => {
         let payload = {
             key: s3data.Key,
@@ -50,18 +65,26 @@ async function processCsvToEcs(s3data) {
                 return reject(err);
             }
             else {
-                // console.log(data); 
+                let lambdaPayload = JSON.parse(data.Payload);
+                if (lambdaPayload.errorMessage) {
+                    return reject({ status: 500, message: "Oops something went wrong in processing csv to elasticsearch" });
+                }
                 return resolve(data);
             }          // successful response
         });
     });
 }
 
+/**
+ * Upload file to local disk EBS
+ * @param {Request} request 
+ */
 async function uploadToTemp(request) {
-    try {
-        let filename;
-        
-        return new Promise((resolve, reject) => {
+
+    let filename;
+    return new Promise(async (resolve, reject) => {
+        try {
+
             let form = new formidable.IncomingForm();
             // form.multiples = false; // allows for multiple files in a single request
             form.maxFieldsSize = 2 * 1024 * 1024;
@@ -71,31 +94,28 @@ async function uploadToTemp(request) {
             form.keepExtensions = true;
             form.parse(request, async (err, fields, file) => {
 
-                if (err) { throw err; }
+                if (err) { return reject(err); }
+                // no file is found
+                if (!file) { return reject({ status: 400, message: 'No file were uploaded' }); }
             });
 
-            // assiging file location to uploade
+            // assiging file location to upload
             form.on('fileBegin', function (name, file) {
+
+                if (file && (!file.name || !file.type.includes('csv'))) {
+                    return reject({ status: 400, message: "Please upload valid csv file" });
+                }
+                file.name = uuid() + '-' + file.name;
                 file.path = path.join(FILE_PATH, file.name);
             });
 
             form.on('file', function (name, file) {
-		 console.log(`Uploading file ${file.name} to temporary location`)
+                // appending uuid to filename to avoid duplicate filename problem with different data
                 filename = file.name;
-                //console.log(`Uploading file ${file.name} to temporary location`)
             });
-		
-		form.on('aborted', function() {
-			console.log("Socket is closed by users");
-			return reject({ status : 400 , message:"File upload was canceled because of socket closed"});
-		});
-            form.on('end', function (name) {
-               
-                if (!filename) {
-                    return reject({ status: 400, message: "Please upload csv file" });
-                }
-                console.log(`File${filename} is successfully uploaded`);
-                return resolve(filename);
+
+            form.on('aborted', function () {
+                return reject({ status: 400, message: "File upload was canceled because of socket closed" });
             });
 
             form.on('error', function (err) {
@@ -103,12 +123,22 @@ async function uploadToTemp(request) {
                 return reject(err);
             });
 
-        });
-    } catch (e) {
-        throw e;
-    }
+            form.on('end', function () {
+                return resolve(filename);
+            });
+
+        } catch (e) {
+            return reject(e);
+        }
+    });
 }
 
+/**
+ * Upload file from local to S3
+ * @param {string} bucket 
+ * @param {string} path 
+ * @param {string} key 
+ */
 async function uploadToS3(bucket, path, key) {
     try {
         console.log(`Uploading file ${key} to s3`);
@@ -116,6 +146,7 @@ async function uploadToS3(bucket, path, key) {
 
             // get a ReadableStream from the location of the file
             let stream = fs.createReadStream(path);
+
             // var options = {partSize: 50 * 1024 * 1024, queueSize: 4};
             let params = {
                 Key: key,
@@ -123,21 +154,16 @@ async function uploadToS3(bucket, path, key) {
                 Body: stream
             };
 
-            // return await S3.upload(params).promise();
-
             // return a promise for an S3 upload
             return await S3.upload(params)
                 .on('httpUploadProgress', function (evt) {
-                    console.log('Progress:', evt.loaded, '/', evt.total);
+                    console.log('Progress of s3 upload:', evt.loaded, '/', evt.total);
                 }).
                 send(function (err, data) {
                     if (err) {
-                        console.log("Error in s3 upload", err);
                         return reject(err);
                     }
-                    console.log("Uploaded to s3 with data", data);
                     return resolve(data);
-
                 });
         });
     }
@@ -145,6 +171,26 @@ async function uploadToS3(bucket, path, key) {
         throw err;
     };
 }
+
+/**
+ * 
+ * @param {string} path remove file from EBS
+ */
+async function rmFile(path) {
+    try {
+        return await new Promise((resolve, reject) => {
+            fs.unlink(path, (err) => {
+                if (err) {
+                    reject(err);
+                }
+                resolve(true);
+            });
+        });
+    } catch (err) {
+        throw err;
+    }
+}
+
 
 module.exports = {
     upload
