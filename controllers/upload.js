@@ -8,7 +8,7 @@ const BUCKET_NAME = 'upload-csv-ecs';
 const FILE_PATH = __dirname + '/../tmp';
 
 async function upload(request){
-    
+try{    
     let filename = await uploadToTemp(request);
 
     let filePath = path.join(FILE_PATH, filename);
@@ -21,6 +21,9 @@ async function upload(request){
     resLambda.LogResult = new Buffer(resLambda.LogResult, 'base64').toString();
     
     return `${filename} was successfully insterted in elastic search`;
+} catch(e){
+throw e;
+}
 }
 
 /**
@@ -81,7 +84,11 @@ async function uploadToTemp(request) {
                 filename = file.name;
                 //console.log(`Uploading file ${file.name} to temporary location`)
             });
-
+		
+		form.on('aborted', function() {
+			console.log("Socket is closed by users");
+			return reject({ status : 400 , message:"File upload was canceled because of socket closed"});
+		});
             form.on('end', function (name) {
                
                 if (!filename) {

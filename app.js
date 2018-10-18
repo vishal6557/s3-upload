@@ -13,7 +13,7 @@ var server = require('http').createServer(app);
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'jade');
-app.use(bodyParser.json({limit: "15360mb"}));
+//app.use(bodyParser.json({limit: "15360mb"}));
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -47,5 +47,6 @@ var port = 3000;
 server.listen(port, function () {
     console.log('Server starting at port ' , port);
 });
+server.setTimeout(0);
 
 module.exports = app;
