@@ -7,6 +7,7 @@ const auth = require('../auth.json');
 const BUCKET_NAME = 'upload-csv-ecs';
 const uuid = require('uuid/v4');
 const FILE_PATH = __dirname + '/../tmp';
+const UploadError = require('../services/error');
 
 /**
  *  Upload file and response of lambda function
@@ -17,7 +18,7 @@ async function upload(request) {
 
         let filename = await uploadToTemp(request);
         if (!filename) {
-            throw { status: 400, message: "No file name is found" };
+            throw new UploadError.InvalidParamter("No file name is found");
         }
 
         let filePath = path.join(FILE_PATH, filename);
@@ -59,6 +60,8 @@ async function processCsvToEcs(s3data) {
             InvocationType: "RequestResponse",
             LogType: "Tail"
         };
+
+        // invoking lambda function
         lambda.invoke(params, function (err, data) {
             if (err) {
                 console.log(err, err.stack); // an error occurred
@@ -69,8 +72,9 @@ async function processCsvToEcs(s3data) {
                 if (lambdaPayload.errorMessage) {
                     return reject({ status: 500, message: "Oops something went wrong in processing csv to elasticsearch" });
                 }
+                // successful response
                 return resolve(data);
-            }          // successful response
+            }
         });
     });
 }
@@ -80,42 +84,42 @@ async function processCsvToEcs(s3data) {
  * @param {Request} request 
  */
 async function uploadToTemp(request) {
-
     let filename;
+
     return new Promise(async (resolve, reject) => {
         try {
 
             let form = new formidable.IncomingForm();
-            // form.multiples = false; // allows for multiple files in a single request
             form.maxFieldsSize = 2 * 1024 * 1024;
             form.maxFileSize = 10 * 1024 * 1024 * 1024;
-            // form.uploadDir = __dirname + "/tmp";
-
             form.keepExtensions = true;
+
             form.parse(request, async (err, fields, file) => {
 
                 if (err) { return reject(err); }
-                // no file is found
-                if (!file) { return reject({ status: 400, message: 'No file were uploaded' }); }
+
+                // no file were found
+                if (!file) { return reject(new UploadError.InvalidParamter('No file were uploaded'))}
             });
 
             // assiging file location to upload
             form.on('fileBegin', function (name, file) {
 
                 if (file && (!file.name || !file.type.includes('csv'))) {
-                    return reject({ status: 400, message: "Please upload valid csv file" });
+                    return reject(new Uplo);
                 }
+
+                // appending uuid to filename to avoid duplicate filename problem with different data
                 file.name = uuid() + '-' + file.name;
                 file.path = path.join(FILE_PATH, file.name);
             });
 
             form.on('file', function (name, file) {
-                // appending uuid to filename to avoid duplicate filename problem with different data
                 filename = file.name;
             });
 
             form.on('aborted', function () {
-                return reject({ status: 400, message: "File upload was canceled because of socket closed" });
+                return reject(new UploadError.InvalidParamter("File upload was canceled because of socket closed"));
             });
 
             form.on('error', function (err) {
@@ -158,8 +162,7 @@ async function uploadToS3(bucket, path, key) {
             return await S3.upload(params)
                 .on('httpUploadProgress', function (evt) {
                     console.log('Progress of s3 upload:', evt.loaded, '/', evt.total);
-                }).
-                send(function (err, data) {
+                }).send(function (err, data) {
                     if (err) {
                         return reject(err);
                     }

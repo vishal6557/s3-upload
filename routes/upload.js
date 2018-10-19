@@ -1,15 +1,16 @@
-var express = require('express');
-var router = express.Router();
+let express = require('express');
+let router = express.Router();
 let UploadController = require('../controllers/upload');
+let UploadError = require('../services/error');
 
 /**
  * Uplaod file to s3
  */
 router.post("/", async (req, res, next) => {
     try {
-
+        console.log("Coming in route post /")
         if (!req.headers['content-type'] || !req.headers['content-type'].includes("multipart/form-data")) {
-            throw { status: 400, message: "Only csv is supported with type as multipart/form-data" }
+            throw new UploadError.InvalidParamter("Only csv is supported with type as multipart/form-data");
         }
 
         let message = await UploadController.upload(req);
@@ -23,7 +24,7 @@ router.post("/", async (req, res, next) => {
 
 router.get("/", async (req, res, next) => {
 
-    console.log("Coming in route get/")
+    console.log("Coming in route get /")
     try {
         res.json({
             success: true,
