@@ -106,7 +106,7 @@ async function uploadToTemp(request) {
             form.on('fileBegin', function (name, file) {
 
                 if (file && (!file.name || !file.type.includes('csv'))) {
-                    return reject(new Uplo);
+                    return reject(new UploadError.InvalidParamter('file must be csv'));
                 }
 
                 // appending uuid to filename to avoid duplicate filename problem with different data
